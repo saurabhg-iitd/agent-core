@@ -25,9 +25,19 @@ wheels/
 *.egg
 
 # Virtual environments
+.venv/
 venv/
 ENV/
 env/
+
+# AgentCore build cache
+.bedrock_agentcore/
+
+# Egg info
+src/*.egg-info/
+
+# uv lock (optional: remove this line if you want reproducible installs)
+# uv.lock
 
 # IDE
 .vscode/
