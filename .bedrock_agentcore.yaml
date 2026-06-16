@@ -30,9 +30,9 @@ agents:
         idle_runtime_session_timeout: null
         max_lifetime: null
     bedrock_agentcore:
-      agent_id: wheelseyedemo_Agent-3pBn64CUg5
-      agent_arn: arn:aws:bedrock-agentcore:ap-south-1:489284938287:runtime/wheelseyedemo_Agent-3pBn64CUg5
-      agent_session_id: 5bf00669-9e46-495d-a655-c764d9ca9259
+      agent_id: null
+      agent_arn: null
+      agent_session_id: null
     codebuild:
       project_name: null
       execution_role: null
