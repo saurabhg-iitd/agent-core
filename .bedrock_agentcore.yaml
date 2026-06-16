@@ -6,7 +6,7 @@ agents:
     node_version: null
     entrypoint: /Users/casentars/Documents/wheelseye/agentcore/wheelseyedemo/src/main.py
     deployment_type: direct_code_deploy
-    runtime_type: PYTHON_3_10
+    runtime_type: PYTHON_3_12
     platform: linux/amd64
     container_runtime: null
     source_path: /Users/casentars/Documents/wheelseye/agentcore/wheelseyedemo/src

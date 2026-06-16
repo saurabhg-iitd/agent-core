@@ -6,9 +6,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "wheelseyedemo"
 version = "0.1.0"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 
 dependencies = [
+    "rpds-py>=0.20.0,<2026",
     "aws-opentelemetry-distro >= 0.10.0",
     "bedrock-agentcore >= 1.0.3",
     "boto3 >= 1.38.0",
