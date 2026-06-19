@@ -19,10 +19,8 @@ def get_word_count(text: str) -> int:
 
 @app.entrypoint
 async def invoke(payload, context):
-    from bedrock_agentcore.memory.integrations.strands import (
-        AgentCoreMemorySessionManager,
-        AgentCoreMemoryConfig,
-    )
+    from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
+    from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
 
     session_id = payload.get("session_id", "default-session")
     actor_id = payload.get("actor_id", "default-user")
