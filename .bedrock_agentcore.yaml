@@ -38,7 +38,7 @@ agents:
       execution_role: null
       source_bucket: null
     memory:
-      mode: LONG_TERM_MEMORY
+      mode: STM_AND_LTM
       memory_id: wheelseyedemoMemory-XWdvwK9w90
       memory_arn: arn:aws:bedrock-agentcore:ap-south-1:489284938287:memory/wheelseyedemoMemory-XWdvwK9w90
       memory_name: wheelseyedemoMemory
