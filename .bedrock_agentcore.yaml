@@ -22,9 +22,9 @@ agents:
       network_configuration:
         network_mode: VPC
         network_mode_config:
-          subnet_ids:
+          subnets:
             - subnet-01b91c27d40b4dfb6
-          security_group_ids:
+          security_groups:
             - sg-0b0467f49ff9a52ad
       protocol_configuration:
         server_protocol: HTTP
