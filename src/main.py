@@ -1,6 +1,8 @@
 from strands import Agent, tool
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
-from mcp_client.client import get_litellm_mcp_client
+from mcp import ClientSession
+from strands.tools.mcp.mcp_agent_tool import MCPAgentTool
+from mcp_client.client import AsyncMCPSession, get_litellm_transport
 from model.load import load_model
 import os
 
@@ -39,20 +41,23 @@ async def invoke(payload, context):
         region_name=os.getenv("AWS_REGION", "ap-south-1"),
     )
 
-    mcp_client = get_litellm_mcp_client()
-    with mcp_client:
-        agent = Agent(
-            model=load_model(),
-            system_prompt="You are a helpful assistant for Wheelseye. Use tools when appropriate.",
-            tools=[add_numbers, get_word_count, *mcp_client.list_tools_sync()],
-            session_manager=session_manager,
-        )
+    async with get_litellm_transport() as (read, write, _):
+        async with ClientSession(read, write) as mcp_session:
+            await mcp_session.initialize()
+            tools_result = await mcp_session.list_tools()
+            proxy = AsyncMCPSession(mcp_session)
+            mcp_tools = [MCPAgentTool(t, proxy) for t in tools_result.tools]
 
-        stream = agent.stream_async(payload.get("prompt", "Hello!"))
+            agent = Agent(
+                model=load_model(),
+                system_prompt="You are a helpful assistant for Wheelseye. Use tools when appropriate.",
+                tools=[add_numbers, get_word_count, *mcp_tools],
+                session_manager=session_manager,
+            )
 
-        async for event in stream:
-            if "data" in event and isinstance(event["data"], str):
-                yield event["data"]
+            async for event in agent.stream_async(payload.get("prompt", "Hello!")):
+                if "data" in event and isinstance(event["data"], str):
+                    yield event["data"]
 
 if __name__ == "__main__":
     app.run()
