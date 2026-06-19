@@ -1,9 +1,5 @@
 from strands import Agent, tool
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
-from bedrock_agentcore.memory.integrations.strands import (
-    AgentCoreMemorySessionManager,
-    AgentCoreMemoryConfig,
-)
 from model.load import load_model
 import os
 
@@ -23,6 +19,11 @@ def get_word_count(text: str) -> int:
 
 @app.entrypoint
 async def invoke(payload, context):
+    from bedrock_agentcore.memory.integrations.strands import (
+        AgentCoreMemorySessionManager,
+        AgentCoreMemoryConfig,
+    )
+
     session_id = payload.get("session_id", "default-session")
     actor_id = payload.get("actor_id", "default-user")
 
