@@ -20,8 +20,12 @@ agents:
       s3_path: s3://bedrock-agentcore-codebuild-sources-489284938287-ap-south-1
       s3_auto_create: false
       network_configuration:
-        network_mode: PUBLIC
-        network_mode_config: null
+        network_mode: VPC
+        network_mode_config:
+          subnet_ids:
+            - subnet-01b91c27d40b4dfb6
+          security_group_ids:
+            - sg-0b0467f49ff9a52ad
       protocol_configuration:
         server_protocol: HTTP
       observability:
