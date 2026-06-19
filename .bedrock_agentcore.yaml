@@ -38,10 +38,10 @@ agents:
       execution_role: null
       source_bucket: null
     memory:
-      mode: NO_MEMORY
-      memory_id: null
-      memory_arn: null
-      memory_name: null
+      mode: LONG_TERM_MEMORY
+      memory_id: wheelseyedemoMemory-XWdvwK9w90
+      memory_arn: arn:aws:bedrock-agentcore:ap-south-1:489284938287:memory/wheelseyedemoMemory-XWdvwK9w90
+      memory_name: wheelseyedemoMemory
       event_expiry_days: 30
       first_invoke_memory_check_done: false
       was_created_by_toolkit: false
