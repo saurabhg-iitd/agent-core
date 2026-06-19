@@ -1,12 +1,11 @@
 from mcp.client.streamable_http import streamablehttp_client
 from strands.tools.mcp.mcp_client import MCPClient
 
-# ExaAI provides information about code through web searches, crawling and code context searches through their platform. Requires no authentication
-EXAMPLE_MCP_ENDPOINT = "https://mcp.exa.ai/mcp"
+LITELLM_MCP_ENDPOINT = "http://litellm.prod-we.com/mcp"
+LITELLM_API_KEY = "Bearer sk-ETFcYN4ay5SmXs5B1NEXpg"
 
-def get_streamable_http_mcp_client() -> MCPClient:
-    """
-    Returns an MCP Client compatible with Strands
-    """
-    # to use an MCP server that supports bearer authentication, add headers={"Authorization": f"Bearer {access_token}"}
-    return MCPClient(lambda: streamablehttp_client(EXAMPLE_MCP_ENDPOINT))
+def get_litellm_mcp_client() -> MCPClient:
+    return MCPClient(lambda: streamablehttp_client(
+        LITELLM_MCP_ENDPOINT,
+        headers={"x-litellm-api-key": LITELLM_API_KEY},
+    ))

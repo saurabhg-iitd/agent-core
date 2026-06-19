@@ -1,5 +1,6 @@
 from strands import Agent, tool
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
+from mcp_client.client import get_litellm_mcp_client
 from model.load import load_model
 import os
 
@@ -38,18 +39,20 @@ async def invoke(payload, context):
         region_name=os.getenv("AWS_REGION", "ap-south-1"),
     )
 
-    agent = Agent(
-        model=load_model(),
-        system_prompt="You are a helpful assistant for Wheelseye. Use tools when appropriate.",
-        tools=[add_numbers, get_word_count],
-        session_manager=session_manager,
-    )
+    mcp_client = get_litellm_mcp_client()
+    with mcp_client:
+        agent = Agent(
+            model=load_model(),
+            system_prompt="You are a helpful assistant for Wheelseye. Use tools when appropriate.",
+            tools=[add_numbers, get_word_count, *mcp_client.list_tools_sync()],
+            session_manager=session_manager,
+        )
 
-    stream = agent.stream_async(payload.get("prompt", "Hello!"))
+        stream = agent.stream_async(payload.get("prompt", "Hello!"))
 
-    async for event in stream:
-        if "data" in event and isinstance(event["data"], str):
-            yield event["data"]
+        async for event in stream:
+            if "data" in event and isinstance(event["data"], str):
+                yield event["data"]
 
 if __name__ == "__main__":
     app.run()
