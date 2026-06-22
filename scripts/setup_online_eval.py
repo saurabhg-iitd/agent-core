@@ -1,6 +1,9 @@
+import os
 from bedrock_agentcore_starter_toolkit import Evaluation
 
-eval_client = Evaluation(region_name="ap-south-1")
+os.environ.setdefault("AWS_DEFAULT_REGION", "ap-south-1")
+
+eval_client = Evaluation()
 
 config = eval_client.create_online_config(
     config_name="wheelseyedemo_online_eval",
