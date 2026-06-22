@@ -1,6 +1,6 @@
 from bedrock_agentcore_starter_toolkit import Evaluation
 
-eval_client = Evaluation()
+eval_client = Evaluation(region_name="ap-south-1")
 
 config = eval_client.create_online_config(
     config_name="wheelseyedemo_online_eval",
