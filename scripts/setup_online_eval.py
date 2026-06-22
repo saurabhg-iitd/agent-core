@@ -17,7 +17,7 @@ config = eval_client.create_online_config(
         "Builtin.ToolSelectionAccuracy",
     ],
     config_description="Continuous evaluation of wheelseyedemo agent",
-    execution_role_arn=EXECUTION_ROLE_ARN,
+    execution_role=EXECUTION_ROLE_ARN,
     enable_on_create=True,
 )
 
