@@ -44,16 +44,26 @@ def invoke_agent(tc):
         ["agentcore", "invoke", payload],
         capture_output=True, text=True
     )
-    return result.stdout.strip()
+    output = result.stdout
+    # Extract internal session ID from "Session: <uuid>" in output
+    internal_session_id = None
+    for part in output.split():
+        if len(part) == 36 and part.count("-") == 4:
+            internal_session_id = part.strip("│").strip()
+            break
+    return output.strip(), internal_session_id
 
 eval_client = Evaluation()
 
 print("=== Dataset Evaluation ===\n")
 
+session_map = {}
 for tc in TEST_CASES:
     print(f"[{tc['scenario_id']}] Invoking: {tc['prompt']}")
-    response = invoke_agent(tc)
-    print(f"  Response: {response[:100]}")
+    response, internal_id = invoke_agent(tc)
+    print(f"  Response    : {response[:100]}")
+    print(f"  Internal ID : {internal_id}")
+    session_map[tc["scenario_id"]] = internal_id
 
 print("\nWaiting 30s for spans to propagate...")
 time.sleep(30)
@@ -61,11 +71,15 @@ time.sleep(30)
 print("\n=== Scoring ===\n")
 
 for tc in TEST_CASES:
-    print(f"[{tc['scenario_id']}] Evaluating session: {tc['session_id']}")
+    internal_id = session_map.get(tc["scenario_id"])
+    if not internal_id:
+        print(f"[{tc['scenario_id']}] Could not get internal session ID, skipping")
+        continue
+    print(f"[{tc['scenario_id']}] Evaluating session: {internal_id}")
     try:
         results = eval_client.run(
             agent_id=AGENT_ID,
-            session_id=tc["session_id"],
+            session_id=internal_id,
             evaluators=["Builtin.Helpfulness", "Builtin.GoalSuccessRate"],
         )
         successful = results.get_successful_results()
