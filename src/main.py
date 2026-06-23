@@ -55,9 +55,11 @@ async def invoke(payload, context):
                 session_manager=session_manager,
             )
 
+            parts = []
             async for event in agent.stream_async(payload.get("prompt", "Hello!")):
                 if "data" in event and isinstance(event["data"], str):
-                    yield event["data"]
+                    parts.append(event["data"])
+            return "".join(parts)
 
 if __name__ == "__main__":
     app.run()
