@@ -42,11 +42,13 @@ def _build_session_manager(session_id: str, actor_id: str):
         region_name=REGION,
     )
 
-def _build_agent(session_manager, mcp_tools):
+def _build_agent(session_manager, mcp_tools, session_id: str):
     kwargs = {
         "model": load_model(),
         "system_prompt": "You are a helpful assistant for Wheelseye. Use tools when appropriate.",
         "tools": [add_numbers, get_word_count, *mcp_tools],
+        # Required for AgentCore evaluation — emits strands.telemetry.tracer spans to aws/spans
+        "trace_attributes": {"session.id": session_id},
     }
     if session_manager is not None:
         kwargs["session_manager"] = session_manager
@@ -56,8 +58,8 @@ async def _run_agent(agent: Agent, prompt: str) -> str:
     result = await agent.invoke_async(prompt)
     return str(result).strip()
 
-async def _invoke_agent(session_manager, prompt: str, mcp_tools):
-    agent = _build_agent(session_manager, mcp_tools)
+async def _invoke_agent(session_manager, prompt: str, mcp_tools, session_id: str):
+    agent = _build_agent(session_manager, mcp_tools, session_id)
     return await _run_agent(agent, prompt)
 
 @app.entrypoint
@@ -77,7 +79,7 @@ async def invoke(payload, context):
                         tools_result = await mcp_session.list_tools()
                         proxy = AsyncMCPSession(mcp_session)
                         mcp_tools = [MCPAgentTool(t, proxy) for t in tools_result.tools]
-                        text = await _invoke_agent(session_manager, prompt, mcp_tools)
+                        text = await _invoke_agent(session_manager, prompt, mcp_tools, session_id)
                         return {"result": text}
             except Exception as e:
                 app.logger.warning(
@@ -86,7 +88,7 @@ async def invoke(payload, context):
                     e,
                 )
 
-        text = await _invoke_agent(session_manager, prompt, [])
+        text = await _invoke_agent(session_manager, prompt, [], session_id)
         return {"result": text}
     except Exception as e:
         app.logger.exception("Invoke failed for prompt=%r", prompt)

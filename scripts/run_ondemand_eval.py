@@ -6,19 +6,21 @@ Usage:
 
 Example:
     agentcore invoke '{"prompt":"What is 10 plus 15?"}'
-    # Session: b99794a2-5de1-4579-9b61-e107341afbdc  ← use this UUID
-    sleep 60
-    python scripts/run_ondemand_eval.py b99794a2-5de1-4579-9b61-e107341afbdc
+    # Session: <uuid>  ← use this UUID (not payload session_id)
+    sleep 90
+    python scripts/run_ondemand_eval.py <uuid>
 
 Prerequisite:
-    aws/spans log group must exist. If eval fails with "Log group not found: aws/spans",
-    run: python scripts/setup_observability.py
+    Agent must pass trace_attributes={"session.id": session_id} to Strands Agent (see main.py).
+    aws/spans log group must exist — run scripts/setup_observability.py if missing.
 """
 import os
 import sys
 
 import boto3
 from bedrock_agentcore_starter_toolkit import Evaluation
+from bedrock_agentcore_starter_toolkit.operations.observability.client import ObservabilityClient
+from bedrock_agentcore_starter_toolkit.operations.constants import InstrumentationScopes
 
 AGENT_ID = "wheelseyedemo_Agent-L3yc137oAy"
 REGION = os.getenv("AWS_REGION", "ap-south-1")
@@ -36,6 +38,39 @@ def spans_log_group_exists() -> bool:
         return False
 
 
+def diagnose_spans(session_id: str) -> None:
+    """Print span counts to help debug empty eval results."""
+    from datetime import datetime, timedelta
+
+    obs = ObservabilityClient(region_name=REGION)
+    end = datetime.now()
+    start = end - timedelta(days=1)
+    start_ms = int(start.timestamp() * 1000)
+    end_ms = int(end.timestamp() * 1000)
+
+    try:
+        spans = obs.query_spans_by_session(session_id, start_ms, end_ms, AGENT_ID)
+    except Exception as e:
+        print(f"  Could not query spans: {e}")
+        return
+
+    print(f"  Total spans in aws/spans for session: {len(spans)}")
+
+    strands_count = 0
+    for span in spans:
+        raw = span.raw_message or {}
+        scope = raw.get("scope", {}) if isinstance(raw, dict) else {}
+        scope_name = scope.get("name", "") if isinstance(scope, dict) else ""
+        if scope_name == InstrumentationScopes.STRANDS:
+            strands_count += 1
+            print(f"  ✓ Found Strands span: {span.span_name or raw.get('name', '?')}")
+
+    print(f"  Strands spans (strands.telemetry.tracer): {strands_count}")
+    if strands_count == 0:
+        print("\n  No Strands spans found — evaluation needs these.")
+        print("  Fix: redeploy agent with trace_attributes in main.py, invoke again, wait 90s.")
+
+
 def main():
     session_id = sys.argv[1] if len(sys.argv) > 1 else None
     if not session_id:
@@ -45,10 +80,7 @@ def main():
 
     if not spans_log_group_exists():
         print(f"ERROR: CloudWatch log group '{SPANS_LOG_GROUP}' does not exist in {REGION}.")
-        print("Evaluation requires OTEL spans in aws/spans.")
-        print("\nFix:")
-        print("  python scripts/setup_observability.py")
-        print("  # wait 10-15 min for X-Ray destination ACTIVE, invoke agent, wait 60s, retry")
+        print("Run: python scripts/setup_observability.py")
         sys.exit(1)
 
     eval_client = Evaluation(region=REGION)
@@ -65,17 +97,19 @@ def main():
     except Exception as e:
         if "No spans found" in str(e):
             print(f"\nNo spans found for session {session_id}.")
-            print("Try:")
-            print("  1. Invoke the agent again and use the NEW session UUID")
-            print("  2. Wait 60-90 seconds after invoke before running eval")
-            print("  3. Confirm X-Ray destination is ACTIVE:")
-            print("       aws xray get-trace-segment-destination --region ap-south-1")
+            print("Invoke the agent, wait 90s, use the NEW session UUID from invoke output.")
+        diagnose_spans(session_id)
         raise
 
     successful = results.get_successful_results()
     failed = results.get_failed_results()
 
     print(f"\nSuccessful: {len(successful)}  |  Failed: {len(failed)}")
+
+    if not successful and not failed:
+        print("\nNo evaluation results — spans exist but none matched eval filters.")
+        print("Diagnosing spans...")
+        diagnose_spans(session_id)
 
     for result in successful:
         print(f"\n  Evaluator : {result.evaluator_name}")
