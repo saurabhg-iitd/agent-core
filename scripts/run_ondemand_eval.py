@@ -11,6 +11,8 @@ Example:
 
 Prerequisite:
     Agent must pass trace_attributes={"session.id": session_id} to Strands Agent (see main.py).
+    pyproject.toml needs strands-agents[otel] and aws-opentelemetry-distro.
+    Redeploy with: agentcore deploy --env OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental
     aws/spans log group must exist — run scripts/setup_observability.py if missing.
 """
 import argparse
@@ -105,6 +107,21 @@ def wait_for_spans(session_id: str, max_wait: int) -> tuple[int, int]:
     return 0, 0
 
 
+def _scope_stats_query(session_id: str) -> str:
+    return f"""fields scope.name as scopeName, name, traceId
+| filter `attributes.session.id` = '{session_id}'
+| stats count(*) as cnt by scopeName, name
+| sort cnt desc
+| limit 20"""
+
+
+def _trace_scope_query(trace_id: str) -> str:
+    return f"""fields scope.name as scopeName, name, spanId
+| filter traceId = '{trace_id}'
+| sort @timestamp asc
+| limit 50"""
+
+
 def diagnose_spans(session_id: str) -> None:
     """Print detailed span diagnostics."""
     from datetime import datetime, timedelta
@@ -119,24 +136,54 @@ def diagnose_spans(session_id: str) -> None:
     print(f"\n--- Span diagnostics for session {session_id} ---")
     print(f"  aws/spans (with agent filter): {total} total, {strands} Strands")
 
+    # Scope breakdown in aws/spans (no agent filter)
+    scope_rows = _run_insights_query(logs, SPANS_LOG_GROUP, _scope_stats_query(session_id), start_ms, end_ms)
+    print(f"  aws/spans scope breakdown: {len(scope_rows)} scope/name group(s)")
+    for row in scope_rows[:8]:
+        fields = {f["field"]: f.get("value") for f in row}
+        print(f"    - {fields.get('scopeName', '?')}: {fields.get('name', '?')} ({fields.get('cnt', '?')}x)")
+
     # Broader query — session only, no agent_id parse filter
-    broad_query = f"""fields @timestamp, traceId, name, `attributes.session.id`, `resource.attributes.cloud.resource_id`
+    broad_query = f"""fields @timestamp, traceId, name, scope.name as scopeName, `attributes.session.id`
 | filter `attributes.session.id` = '{session_id}'
 | sort @timestamp desc
 | limit 10"""
     rows = _run_insights_query(logs, SPANS_LOG_GROUP, broad_query, start_ms, end_ms)
     print(f"  aws/spans (session only, no agent filter): {len(rows)} row(s)")
-    for row in rows[:3]:
+    trace_ids = []
+    for row in rows[:5]:
         fields = {f["field"]: f.get("value") for f in row}
-        print(f"    - {fields.get('name', '?')} trace={fields.get('traceId', '?')[:16]}...")
+        tid = fields.get("traceId", "")
+        if tid and tid not in trace_ids:
+            trace_ids.append(tid)
+        print(
+            f"    - {fields.get('scopeName', '?')}: {fields.get('name', '?')} "
+            f"trace={tid[:16]}..."
+        )
 
     # Check otel-rt-logs stream on runtime log group
-    otel_query = f"""fields @timestamp, traceId, name
+    otel_query = f"""fields @timestamp, traceId, name, scope.name as scopeName
 | filter `attributes.session.id` = '{session_id}'
 | sort @timestamp desc
-| limit 5"""
+| limit 10"""
     otel_rows = _run_insights_query(logs, RUNTIME_LOG_GROUP, otel_query, start_ms, end_ms)
-    print(f"  runtime otel-rt-logs for session: {len(otel_rows)} row(s)")
+    print(f"  runtime log group for session: {len(otel_rows)} row(s)")
+    for row in otel_rows[:5]:
+        fields = {f["field"]: f.get("value") for f in row}
+        print(
+            f"    - {fields.get('scopeName', '?')}: {fields.get('name', '?')} "
+            f"trace={fields.get('traceId', '?')[:16]}..."
+        )
+
+    # Inspect all spans under platform trace IDs (Strands may share trace but lack session.id)
+    for tid in trace_ids[:2]:
+        trace_rows = _run_insights_query(logs, SPANS_LOG_GROUP, _trace_scope_query(tid), start_ms, end_ms)
+        strands_in_trace = sum(
+            1
+            for row in trace_rows
+            if any(f.get("field") == "scopeName" and f.get("value") == InstrumentationScopes.STRANDS for f in row)
+        )
+        print(f"  trace {tid[:16]}...: {len(trace_rows)} span(s), {strands_in_trace} Strands")
 
     if total == 0 and len(rows) == 0:
         print("\n  Spans not indexed yet. Wait 2-5 minutes after invoke and retry.")
@@ -144,9 +191,14 @@ def diagnose_spans(session_id: str) -> None:
     elif total == 0 and len(rows) > 0:
         print("\n  Spans exist but agent_id filter may be excluding them.")
         print("  Try: agentcore eval run -a", AGENT_ID, "-s", session_id)
-    if strands == 0 and total > 0:
-        print("\n  Platform spans found but no Strands spans.")
-        print("  Verify main.py has trace_attributes={'session.id': session_id} and redeploy.")
+    if strands == 0:
+        print("\n  No strands.telemetry.tracer spans found.")
+        print("  Required fixes:")
+        print("    1. main.py must pass trace_attributes={'session.id': session_id} to Strands Agent")
+        print("    2. pyproject.toml needs strands-agents[otel] and aws-opentelemetry-distro")
+        print("    3. Redeploy with gen_ai conventions enabled:")
+        print("       agentcore deploy --env OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental")
+        print("    4. Invoke AFTER redeploy and use the NEW session UUID from agentcore invoke output")
 
 
 def main():

@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from strands import Agent, tool
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from mcp import ClientSession
@@ -42,6 +43,24 @@ def _build_session_manager(session_id: str, actor_id: str):
         region_name=REGION,
     )
 
+@contextmanager
+def _session_telemetry(session_id: str):
+    """Propagate session.id via OTEL baggage so all spans in the request share it."""
+    try:
+        from opentelemetry import baggage, context as otel_context
+
+        token = otel_context.attach(baggage.set_baggage("session.id", session_id))
+    except ImportError:
+        token = None
+    try:
+        yield
+    finally:
+        if token is not None:
+            from opentelemetry import context as otel_context
+
+            otel_context.detach(token)
+
+
 def _build_agent(session_manager, mcp_tools, session_id: str):
     kwargs = {
         "model": load_model(),
@@ -69,27 +88,28 @@ async def invoke(payload, context):
     prompt = payload.get("prompt", "Hello!")
 
     try:
-        session_manager = _build_session_manager(session_id, actor_id)
+        with _session_telemetry(session_id):
+            session_manager = _build_session_manager(session_id, actor_id)
 
-        if ENABLE_MCP:
-            try:
-                async with get_litellm_transport() as (read, write, _):
-                    async with ClientSession(read, write) as mcp_session:
-                        await mcp_session.initialize()
-                        tools_result = await mcp_session.list_tools()
-                        proxy = AsyncMCPSession(mcp_session)
-                        mcp_tools = [MCPAgentTool(t, proxy) for t in tools_result.tools]
-                        text = await _invoke_agent(session_manager, prompt, mcp_tools, session_id)
-                        return {"result": text}
-            except Exception as e:
-                app.logger.warning(
-                    "MCP unavailable, falling back to local tools: %s: %s",
-                    type(e).__name__,
-                    e,
-                )
+            if ENABLE_MCP:
+                try:
+                    async with get_litellm_transport() as (read, write, _):
+                        async with ClientSession(read, write) as mcp_session:
+                            await mcp_session.initialize()
+                            tools_result = await mcp_session.list_tools()
+                            proxy = AsyncMCPSession(mcp_session)
+                            mcp_tools = [MCPAgentTool(t, proxy) for t in tools_result.tools]
+                            text = await _invoke_agent(session_manager, prompt, mcp_tools, session_id)
+                            return {"result": text}
+                except Exception as e:
+                    app.logger.warning(
+                        "MCP unavailable, falling back to local tools: %s: %s",
+                        type(e).__name__,
+                        e,
+                    )
 
-        text = await _invoke_agent(session_manager, prompt, [], session_id)
-        return {"result": text}
+            text = await _invoke_agent(session_manager, prompt, [], session_id)
+            return {"result": text}
     except Exception as e:
         app.logger.exception("Invoke failed for prompt=%r", prompt)
         return {"error": str(e), "error_type": type(e).__name__}

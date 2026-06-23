@@ -22,10 +22,10 @@ agents:
       network_configuration:
         network_mode: VPC
         network_mode_config:
-          subnets:
-            - subnet-01b91c27d40b4dfb6
           security_groups:
-            - sg-0b0467f49ff9a52ad
+          - sg-0b0467f49ff9a52ad
+          subnets:
+          - subnet-01b91c27d40b4dfb6
       protocol_configuration:
         server_protocol: HTTP
       observability:
@@ -36,7 +36,7 @@ agents:
     bedrock_agentcore:
       agent_id: null
       agent_arn: null
-      agent_session_id: null
+      agent_session_id: d2d6124d-9851-46c1-80a2-024c3d3232fb
     codebuild:
       project_name: null
       execution_role: null
